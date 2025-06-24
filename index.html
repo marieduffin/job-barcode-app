@@ -51,6 +51,18 @@
       margin-top: 8px;
       text-align: center;
     }
+    #assocCheckboxes {
+      margin-top: 8px;
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    #assocCheckboxes label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.95em;
+    }
   </style>
 </head>
 <body>
@@ -109,12 +121,11 @@
   </div>
 
   <div id="associateSection" class="container" style="display:none;">
-    <label>Select Existing Job (L-Type)</label>
+    <label>Select Existing Job (L, M or A)</label>
     <select id="existingJobSelect"></select>
     <label>Select Job Types to Associate</label>
-    <div>
-      <input type="checkbox" id="assocM" value="M"> <label for="assocM">Machinable Letters (M)</label><br>
-      <input type="checkbox" id="assocA" value="A"> <label for="assocA">Merge FC & Machinable (A)</label>
+    <div id="assocCheckboxes">
+      <!-- checkboxes inserted here dynamically -->
     </div>
     <button class="submit-btn" id="associateBtn">Generate Associated Job IDs</button>
     <div id="associateResult" class="barcode" style="display:none;"></div>
@@ -166,7 +177,7 @@
     });
     tabAssociate.addEventListener('click', () => {
       showSection(associateSection);
-      loadExistingLJobs();
+      loadExistingJobs();
     });
 
     showSection(createSection); // default on load
@@ -282,7 +293,7 @@
 
     function fillSelect(selectEl, items, includeEmpty=false) {
       const oldValue = selectEl.value;
-      selectEl.innerHTML = includeEmpty ? '<option value=\"\">All</option>' : '';
+      selectEl.innerHTML = includeEmpty ? '<option value="">All</option>' : '';
       const sortedItems = [...new Set(items)].sort();
       for(const item of sortedItems) {
         if(item) {
@@ -364,148 +375,4 @@
       const csvContent = [header, ...csvRows].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `JobReport_${new Date().toISOString().slice(0,10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    // Show barcode modal for given jobId
-    const modal = document.getElementById('barcodeModal');
-    const modalJobId = document.getElementById('modalJobId');
-    const modalBarcode = document.getElementById('modalBarcode');
-
-    function showBarcodeModal(jobId) {
-      modalJobId.textContent = jobId;
-      modalBarcode.innerHTML = '';
-      JsBarcode(modalBarcode, jobId, { format:'CODE128', width:2, height:80 });
-      modal.style.display = 'flex';
-      modal.setAttribute('aria-hidden', 'false');
-    }
-
-    function closeModal() {
-      modal.style.display = 'none';
-      modal.setAttribute('aria-hidden', 'true');
-    }
-
-    window.onclick = function(event) {
-      if(event.target === modal) closeModal();
-    };
-
-    // -------- ASSOCIATE JOB TYPES TAB --------
-    const existingJobSelect = document.getElementById('existingJobSelect');
-    const associateBtn = document.getElementById('associateBtn');
-    const associateResult = document.getElementById('associateResult');
-
-    // Load all existing L-type job IDs for selection
-    async function loadExistingLJobs() {
-      associateResult.style.display = 'none';
-      existingJobSelect.innerHTML = '<option value="">-- select --</option>';
-      const { data, error } = await client.from('jobs')
-        .select('job_id, job_date, machine')
-        .eq('job_type', 'L')
-        .order('created_at', { ascending: false });
-
-      if(error) {
-        alert('Error loading jobs: ' + error.message);
-        return;
-      }
-
-      for(const row of data) {
-        const opt = document.createElement('option');
-        opt.value = row.job_id;
-        opt.textContent = row.job_id;
-        existingJobSelect.appendChild(opt);
-      }
-    }
-
-    associateBtn.addEventListener('click', async () => {
-      associateResult.style.display = 'none';
-      const baseJobId = existingJobSelect.value;
-      if(!baseJobId) {
-        alert('Please select a Job ID to associate with.');
-        return;
-      }
-      const selectedJobTypes = [];
-      if(document.getElementById('assocM').checked) selectedJobTypes.push('M');
-      if(document.getElementById('assocA').checked) selectedJobTypes.push('A');
-
-      if(selectedJobTypes.length === 0) {
-        alert('Please select at least one Job Type to associate.');
-        return;
-      }
-
-      // Parse baseJobId: e.g. L10625J2
-      const match = baseJobId.match(/^L(\d{4})(?:J(\d+))?$/);
-      if(!match) {
-        alert('Selected Job ID format is invalid. Expected format like L10625J2.');
-        return;
-      }
-
-      const mmdd = match[1].slice(0,2) + match[1].slice(2); // Just in case
-      const seq = match[2];
-
-      // We need to get the machine and job_date for baseJobId to replicate for new IDs
-      // We'll query supabase for the base job
-      const { data: baseData, error: baseErr } = await client.from('jobs').select('*').eq('job_id', baseJobId).single();
-      if(baseErr || !baseData) {
-        alert('Could not find base job in database.');
-        return;
-      }
-
-      const baseDate = baseData.job_date;
-      const baseMachine = baseData.machine;
-
-      let resultsHTML = '';
-      for(const jt of selectedJobTypes) {
-        // Build new jobId
-        // The job ID pattern is jobType + machine + MMDD + J + sequence from base L job
-
-        // Check if job already exists for that type+machine+date+sequence
-        const { data: existing, error: existErr } = await client.from('jobs')
-          .select('*')
-          .eq('job_type', jt)
-          .eq('machine', baseMachine)
-          .eq('job_date', baseDate)
-          .like('job_id', `${jt}${baseMachine}%J${seq}`);
-
-        if(existErr) {
-          alert('Error checking existing jobs: ' + existErr.message);
-          return;
-        }
-
-        if(existing && existing.length > 0) {
-          // Job already exists, show barcode preview with message
-          resultsHTML += `<div><strong>Job ID already exists:</strong> ${existing[0].job_id}</div>`;
-          resultsHTML += `<svg id="assocBarcode${jt}" class="modal-barcode"></svg><br>`;
-          // Generate barcode after appending HTML
-          setTimeout(() => JsBarcode(document.getElementById(`assocBarcode${jt}`), existing[0].job_id, {format:'CODE128', width:2, height:60}), 0);
-        } else {
-          // Insert new job
-          const newJobId = `${jt}${baseMachine}${baseDate.slice(5,7)}${baseDate.slice(8,10)}J${seq}`;
-          const { error: insertErr } = await client.from('jobs').insert([{
-            job_id: newJobId,
-            job_type: jt,
-            operator: baseData.operator,
-            machine: baseMachine,
-            job_date: baseDate,
-            created_at: new Date().toISOString()
-          }]);
-          if(insertErr) {
-            alert('Error inserting associated job: ' + insertErr.message);
-            return;
-          }
-          resultsHTML += `<div><strong>Created Job ID:</strong> ${newJobId}</div>`;
-          resultsHTML += `<svg id="assocBarcode${jt}" class="modal-barcode"></svg><br>`;
-          setTimeout(() => JsBarcode(document.getElementById(`assocBarcode${jt}`), newJobId, {format:'CODE128', width:2, height:60}), 0);
-        }
-      }
-
-      associateResult.innerHTML = resultsHTML;
-      associateResult.style.display = 'block';
-    });
-  </script>
-</body>
-</html>
+      const url = URL.create
