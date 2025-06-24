@@ -107,138 +107,136 @@
   </div>
 
   <script>
-    const supabase = supabase.createClient(
-      'https://vwsqtcsxxzkxcrdcbbky.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA'
-    );
-
-    const operatorEl = document.getElementById('operator');
-    const jobTypeEl = document.getElementById('jobType');
-    const machineEl = document.getElementById('machine');
-    const dateEl = document.getElementById('jobDate');
-    const createBtn = document.getElementById('createBtn');
-    const result = document.getElementById('result');
-    const jobIdText = document.getElementById('jobIdText');
-    const barcodeSvg = document.getElementById('barcode');
-
-    dateEl.value = new Date().toISOString().slice(0, 10);
-
-    createBtn.addEventListener('click', async () => {
-      const op = operatorEl.value.trim();
-      const jt = jobTypeEl.value;
-      const mc = machineEl.value;
-      const dt = dateEl.value;
-      if (!op || !jt || !mc || !dt) return alert('Please fill in all fields.');
-
-      const [y, m, d] = dt.split('-');
-      const mmdd = m.padStart(2, '0') + d.padStart(2, '0');
-
-      const key = 'seq_' + dt;
-      let seq = parseInt(localStorage.getItem(key) || '0', 10);
-      seq++;
-      localStorage.setItem(key, seq);
-
-      const jobId = jt + mc + mmdd + 'J' + seq;
-      jobIdText.textContent = jobId;
-      result.style.display = 'block';
-      JsBarcode(barcodeSvg, jobId, { format: 'CODE128', width: 2, height: 80 });
-
-      await supabase.from('jobs').insert([{ job_id: jobId, job_type: jt, operator: op, machine: mc, job_date: dt }]);
-    });
-
-    // Tab switching
-    const tabCreate = document.getElementById('tabCreate');
-    const tabReport = document.getElementById('tabReport');
-    const createSection = document.getElementById('createSection');
-    const reportSection = document.getElementById('reportSection');
-
-    function activateTab(tab) {
-      tabCreate.classList.remove('active');
-      tabReport.classList.remove('active');
-      createSection.style.display = 'none';
-      reportSection.style.display = 'none';
-      if (tab === 'create') {
-        tabCreate.classList.add('active');
-        createSection.style.display = 'block';
-      } else {
-        tabReport.classList.add('active');
-        reportSection.style.display = 'block';
-        fetchJobs();
-      }
-    }
-
-    tabCreate.addEventListener('click', () => activateTab('create'));
-    tabReport.addEventListener('click', () => activateTab('report'));
-
-    // Reporting
-    const filterJobType = document.getElementById('filterJobType');
-    const filterOperator = document.getElementById('filterOperator');
-    const filterMachine = document.getElementById('filterMachine');
-    const filterStartDate = document.getElementById('filterStartDate');
-    const filterEndDate = document.getElementById('filterEndDate');
-    const btnFilter = document.getElementById('btnFilter');
-    const btnDownload = document.getElementById('btnDownload');
-    const jobsTable = document.getElementById('jobsTable').querySelector('tbody');
-
-    async function fetchJobs() {
-      let { data: jobs } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
-      const jt = filterJobType.value;
-      const op = filterOperator.value;
-      const mc = filterMachine.value;
-      const sd = filterStartDate.value;
-      const ed = filterEndDate.value;
-
-      if (jt) jobs = jobs.filter(j => j.job_type === jt);
-      if (op) jobs = jobs.filter(j => j.operator === op);
-      if (mc) jobs = jobs.filter(j => j.machine === mc);
-      if (sd) jobs = jobs.filter(j => j.job_date >= sd);
-      if (ed) jobs = jobs.filter(j => j.job_date <= ed);
-
-      populateDropdown(filterJobType, [...new Set(jobs.map(j => j.job_type))], 'All Job Types');
-      populateDropdown(filterOperator, [...new Set(jobs.map(j => j.operator))], 'All Operators');
-      populateDropdown(filterMachine, [...new Set(jobs.map(j => j.machine))], 'All Machines');
-
-      jobsTable.innerHTML = '';
-      jobs.forEach(j => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${j.job_id}</td><td>${j.job_type}</td><td>${j.operator}</td><td>${j.machine}</td><td>${j.job_date}</td><td>${new Date(j.created_at).toLocaleString()}</td>`;
-        jobsTable.appendChild(tr);
-      });
-    }
-
-    function populateDropdown(el, values, label) {
-      const current = el.value;
-      el.innerHTML = `<option value="">${label}</option>`;
-      values.forEach(v => {
-        const o = document.createElement('option');
-        o.value = v;
-        o.textContent = v;
-        el.appendChild(o);
-      });
-      el.value = current;
-    }
-
-    function downloadCSV() {
-      const headers = ['Job ID', 'Job Type', 'Operator', 'Machine', 'Job Date', 'Created'];
-      const rows = Array.from(jobsTable.querySelectorAll('tr')).map(tr =>
-        Array.from(tr.children).map(td => td.textContent)
+    document.addEventListener('DOMContentLoaded', () => {
+      const client = supabase.createClient(
+        'https://vwsqtcsxxzkxcrdcbbky.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA'
       );
-      const csvContent = [headers.join(','), ...rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(','))].join('\r\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'job_report.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
 
-    btnFilter.addEventListener('click', fetchJobs);
-    btnDownload.addEventListener('click', downloadCSV);
+      const operatorEl = document.getElementById('operator');
+      const jobTypeEl = document.getElementById('jobType');
+      const machineEl = document.getElementById('machine');
+      const dateEl = document.getElementById('jobDate');
+      const createBtn = document.getElementById('createBtn');
+      const result = document.getElementById('result');
+      const jobIdText = document.getElementById('jobIdText');
+      const barcodeSvg = document.getElementById('barcode');
 
-    activateTab('create');
+      const tabCreate = document.getElementById('tabCreate');
+      const tabReport = document.getElementById('tabReport');
+      const createSection = document.getElementById('createSection');
+      const reportSection = document.getElementById('reportSection');
+
+      const filterJobType = document.getElementById('filterJobType');
+      const filterOperator = document.getElementById('filterOperator');
+      const filterMachine = document.getElementById('filterMachine');
+      const filterStartDate = document.getElementById('filterStartDate');
+      const filterEndDate = document.getElementById('filterEndDate');
+      const btnFilter = document.getElementById('btnFilter');
+      const btnDownload = document.getElementById('btnDownload');
+      const jobsTable = document.getElementById('jobsTable').querySelector('tbody');
+
+      dateEl.value = new Date().toISOString().slice(0, 10);
+
+      createBtn.addEventListener('click', async () => {
+        const op = operatorEl.value.trim();
+        const jt = jobTypeEl.value;
+        const mc = machineEl.value;
+        const dt = dateEl.value;
+        if (!op || !jt || !mc || !dt) return alert('Please fill in all fields.');
+
+        const [y, m, d] = dt.split('-');
+        const mmdd = m.padStart(2, '0') + d.padStart(2, '0');
+        const key = 'seq_' + dt;
+        let seq = parseInt(localStorage.getItem(key) || '0', 10);
+        seq++;
+        localStorage.setItem(key, seq);
+        const jobId = jt + mc + mmdd + 'J' + seq;
+        jobIdText.textContent = jobId;
+        result.style.display = 'block';
+        JsBarcode(barcodeSvg, jobId, { format: 'CODE128', width: 2, height: 80 });
+
+        await client.from('jobs').insert([{ job_id: jobId, job_type: jt, operator: op, machine: mc, job_date: dt }]);
+      });
+
+      function activateTab(tab) {
+        tabCreate.classList.remove('active');
+        tabReport.classList.remove('active');
+        createSection.style.display = 'none';
+        reportSection.style.display = 'none';
+        if (tab === 'create') {
+          tabCreate.classList.add('active');
+          createSection.style.display = 'block';
+        } else {
+          tabReport.classList.add('active');
+          reportSection.style.display = 'block';
+          fetchJobs();
+        }
+      }
+
+      tabCreate.addEventListener('click', () => activateTab('create'));
+      tabReport.addEventListener('click', () => activateTab('report'));
+
+      async function fetchJobs() {
+        let { data: jobs } = await client.from('jobs').select('*').order('created_at', { ascending: false });
+        const jt = filterJobType.value;
+        const op = filterOperator.value;
+        const mc = filterMachine.value;
+        const sd = filterStartDate.value;
+        const ed = filterEndDate.value;
+
+        if (jt) jobs = jobs.filter(j => j.job_type === jt);
+        if (op) jobs = jobs.filter(j => j.operator === op);
+        if (mc) jobs = jobs.filter(j => j.machine === mc);
+        if (sd) jobs = jobs.filter(j => j.job_date >= sd);
+        if (ed) jobs = jobs.filter(j => j.job_date <= ed);
+
+        populateDropdown(filterJobType, [...new Set(jobs.map(j => j.job_type))], 'All Job Types');
+        populateDropdown(filterOperator, [...new Set(jobs.map(j => j.operator))], 'All Operators');
+        populateDropdown(filterMachine, [...new Set(jobs.map(j => j.machine))], 'All Machines');
+
+        jobsTable.innerHTML = '';
+        jobs.forEach(j => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${j.job_id}</td><td>${j.job_type}</td><td>${j.operator}</td><td>${j.machine}</td><td>${j.job_date}</td><td>${new Date(j.created_at).toLocaleString()}</td>`;
+          jobsTable.appendChild(tr);
+        });
+      }
+
+      function populateDropdown(el, values, label) {
+        const current = el.value;
+        el.innerHTML = `<option value="">${label}</option>`;
+        values.forEach(v => {
+          const o = document.createElement('option');
+          o.value = v;
+          o.textContent = v;
+          el.appendChild(o);
+        });
+        el.value = current;
+      }
+
+      function downloadCSV() {
+        const headers = ['Job ID', 'Job Type', 'Operator', 'Machine', 'Job Date', 'Created'];
+        const rows = Array.from(jobsTable.querySelectorAll('tr')).map(tr =>
+          Array.from(tr.children).map(td => td.textContent)
+        );
+        const csvContent = [headers.join(','), ...rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(','))].join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'job_report.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      btnFilter.addEventListener('click', fetchJobs);
+      btnDownload.addEventListener('click', downloadCSV);
+
+      activateTab('create');
+    });
   </script>
 </body>
 </html>
