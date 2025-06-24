@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OCR Job Barcode Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background:#f9fafb; color:#333; margin:0; padding:20px; }
+    .container { max-width:400px; margin:0 auto; background:#fff; padding:20px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color:#00407A; font-size:1.5em; margin-bottom:10px; }
+    label { display:block; margin-top:10px; font-size:.9em; }
+    select,input { width:100%; padding:8px; margin-top:4px; border:1px solid #ccc; border-radius:4px; }
+    button { width:100%; margin-top:15px; padding:10px; background:#E87722; color:#fff; border:none; border-radius:4px; font-size:1em; cursor:pointer; }
+    button:hover { background:#d56c1e; }
+    .barcode { text-align:center; margin-top:20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Create a new OCR Job</h1>
+    <label>Operator</label>
+    <input id="operator" type="text" placeholder="Your name" />
+
+    <label>Job Type</label>
+    <select id="jobType">
+      <option value="">-- select --</option>
+      <option value="L">First Class Letters (L)</option>
+      <option value="M">Machinable Letters (M)</option>
+      <option value="A">Merge FC & Machinable (A)</option>
+      <option value="F">First Class Flats (F)</option>
+      <option value="D">Standard Flats (D)</option>
+      <option value="T">Standard Letters (T)</option>
+    </select>
+
+    <label>Machine Number</label>
+    <select id="machine">
+      <option value="">-- select --</option>
+      <option value="1">OCR 1</option>
+      <option value="2">OCR 2</option>
+    </select>
+
+    <label>Date</label>
+    <input id="jobDate" type="date" />
+
+    <button id="createBtn">Create Job</button>
+
+    <div id="result" class="barcode" style="display:none;">
+      <div>Job ID: <strong id="jobIdText"></strong></div>
+      <svg id="barcode"></svg>
+    </div>
+  </div>
+
+  <script>
+    const operatorEl = document.getElementById('operator');
+    const jobTypeEl = document.getElementById('jobType');
+    const machineEl = document.getElementById('machine');
+    const dateEl = document.getElementById('jobDate');
+    const btn = document.getElementById('createBtn');
+    const result = document.getElementById('result');
+    const jobIdText = document.getElementById('jobIdText');
+    const barcodeSvg = document.getElementById('barcode');
+
+    dateEl.value = new Date().toISOString().slice(0,10);
+
+    btn.addEventListener('click', () => {
+      const op = operatorEl.value.trim();
+      const jt = jobTypeEl.value;
+      const mc = machineEl.value;
+      const dt = dateEl.value;
+      if (!op || !jt || !mc || !dt) return alert('Please fill in all fields.');
+
+      const [y,m,d] = dt.split('-');
+      const mmdd = m.padStart(2,'0') + d.padStart(2,'0');
+
+      const key = 'seq_' + dt;
+      let seq = parseInt(localStorage.getItem(key) || '0', 10);
+      seq++;
+      localStorage.setItem(key, seq);
+
+      const jobId = jt + mc + mmdd + 'J' + seq;
+      jobIdText.textContent = jobId;
+      result.style.display = 'block';
+      JsBarcode(barcodeSvg, jobId, { format:'CODE128', width:2, height:80 });
+    });
+  </script>
+</body>
+</html>

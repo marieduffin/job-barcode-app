@@ -1,0 +1,5 @@
+# Only track these files
+*
+!.gitignore
+!index.html
+!vercel.json
