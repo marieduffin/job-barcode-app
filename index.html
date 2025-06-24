@@ -2,86 +2,251 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>OCR Job Barcode Generator</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Job ID Automation - Enhanced Reporting</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    body { font-family: sans-serif; background:#f9fafb; color:#333; margin:0; padding:20px; }
-    .container { max-width:400px; margin:0 auto; background:#fff; padding:20px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
-    h1 { color:#00407A; font-size:1.5em; margin-bottom:10px; }
-    label { display:block; margin-top:10px; font-size:.9em; }
-    select,input { width:100%; padding:8px; margin-top:4px; border:1px solid #ccc; border-radius:4px; }
-    button { width:100%; margin-top:15px; padding:10px; background:#E87722; color:#fff; border:none; border-radius:4px; font-size:1em; cursor:pointer; }
-    button:hover { background:#d56c1e; }
-    .barcode { text-align:center; margin-top:20px; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+    label {
+      display: inline-block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    select, input[type="date"], input[type="text"] {
+      margin: 5px 10px 15px 0;
+      padding: 6px;
+      min-width: 150px;
+    }
+    button {
+      padding: 10px 15px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #aaa;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #eee;
+    }
+    .filters-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    #errorMsg {
+      color: red;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Create a new OCR Job</h1>
-    <label>Operator</label>
-    <input id="operator" type="text" placeholder="Your name" />
 
-    <label>Job Type</label>
-    <select id="jobType">
-      <option value="">-- select --</option>
-      <option value="L">First Class Letters (L)</option>
-      <option value="M">Machinable Letters (M)</option>
-      <option value="A">Merge FC & Machinable (A)</option>
-      <option value="F">First Class Flats (F)</option>
-      <option value="D">Standard Flats (D)</option>
-      <option value="T">Standard Letters (T)</option>
-    </select>
+  <h1>Job ID Automation - Enhanced Reporting</h1>
 
-    <label>Machine Number</label>
-    <select id="machine">
-      <option value="">-- select --</option>
-      <option value="1">OCR 1</option>
-      <option value="2">OCR 2</option>
-    </select>
+  <!-- Filters UI -->
+  <div class="filters-row">
+    <label for="filterJobType">Job Type:</label>
+    <select id="filterJobType"><option value="">All</option></select>
 
-    <label>Date</label>
-    <input id="jobDate" type="date" />
+    <label for="filterOperator">Operator:</label>
+    <select id="filterOperator"><option value="">All</option></select>
 
-    <button id="createBtn">Create Job</button>
+    <label for="filterMachine">Machine:</label>
+    <select id="filterMachine"><option value="">All</option></select>
 
-    <div id="result" class="barcode" style="display:none;">
-      <div>Job ID: <strong id="jobIdText"></strong></div>
-      <svg id="barcode"></svg>
-    </div>
+    <label for="filterDateFrom">Date From:</label>
+    <input type="date" id="filterDateFrom" />
+
+    <label for="filterDateTo">Date To:</label>
+    <input type="date" id="filterDateTo" />
+
+    <button id="btnFilter">Apply Filters</button>
+    <button id="btnDownload">Download CSV</button>
   </div>
 
+  <p id="errorMsg"></p>
+
+  <!-- Report Table -->
+  <table id="jobsTable" aria-label="Jobs report table">
+    <thead>
+      <tr>
+        <th>Job ID</th>
+        <th>Job Name</th>
+        <th>Job Type</th>
+        <th>Operator</th>
+        <th>Machine</th>
+        <th>Created At</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="6" style="text-align:center;">Loading...</td></tr>
+    </tbody>
+  </table>
+
   <script>
-    const operatorEl = document.getElementById('operator');
-    const jobTypeEl = document.getElementById('jobType');
-    const machineEl = document.getElementById('machine');
-    const dateEl = document.getElementById('jobDate');
-    const btn = document.getElementById('createBtn');
-    const result = document.getElementById('result');
-    const jobIdText = document.getElementById('jobIdText');
-    const barcodeSvg = document.getElementById('barcode');
+    // Supabase config
+    const supabaseUrl = 'https://vwsqtcsxxzkxcrdcbbky.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA';
+    const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-    dateEl.value = new Date().toISOString().slice(0,10);
+    // DOM Elements
+    const filterJobType = document.getElementById('filterJobType');
+    const filterOperator = document.getElementById('filterOperator');
+    const filterMachine = document.getElementById('filterMachine');
+    const filterDateFrom = document.getElementById('filterDateFrom');
+    const filterDateTo = document.getElementById('filterDateTo');
+    const btnFilter = document.getElementById('btnFilter');
+    const btnDownload = document.getElementById('btnDownload');
+    const jobsTableBody = document.querySelector('#jobsTable tbody');
+    const errorMsg = document.getElementById('errorMsg');
 
-    btn.addEventListener('click', () => {
-      const op = operatorEl.value.trim();
-      const jt = jobTypeEl.value;
-      const mc = machineEl.value;
-      const dt = dateEl.value;
-      if (!op || !jt || !mc || !dt) return alert('Please fill in all fields.');
+    let lastFetchedJobs = []; // cache for CSV download
 
-      const [y,m,d] = dt.split('-');
-      const mmdd = m.padStart(2,'0') + d.padStart(2,'0');
+    // Helper to populate filter dropdown options based on distinct values in DB
+    async function populateFilterOptions() {
+      try {
+        const [typesRes, opsRes, machinesRes] = await Promise.all([
+          supabase.from('jobs').select('job_type', { count: 'exact', distinct: true }),
+          supabase.from('jobs').select('operator', { count: 'exact', distinct: true }),
+          supabase.from('jobs').select('machine', { count: 'exact', distinct: true }),
+        ]);
 
-      const key = 'seq_' + dt;
-      let seq = parseInt(localStorage.getItem(key) || '0', 10);
-      seq++;
-      localStorage.setItem(key, seq);
+        if (typesRes.error || opsRes.error || machinesRes.error) {
+          throw new Error(typesRes.error?.message || opsRes.error?.message || machinesRes.error?.message);
+        }
 
-      const jobId = jt + mc + mmdd + 'J' + seq;
-      jobIdText.textContent = jobId;
-      result.style.display = 'block';
-      JsBarcode(barcodeSvg, jobId, { format:'CODE128', width:2, height:80 });
-    });
+        function fillSelect(selectElem, data, key) {
+          // Remove old options except "All"
+          [...selectElem.options].slice(1).forEach(opt => selectElem.remove(opt.index));
+          // Add new distinct values sorted
+          const distinctVals = data.map(r => r[key]).filter(v => v !== null && v !== '').sort();
+          distinctVals.forEach(val => {
+            const option = document.createElement('option');
+            option.value = val;
+            option.textContent = val;
+            selectElem.appendChild(option);
+          });
+        }
+
+        fillSelect(filterJobType, typesRes.data, 'job_type');
+        fillSelect(filterOperator, opsRes.data, 'operator');
+        fillSelect(filterMachine, machinesRes.data, 'machine');
+
+      } catch (err) {
+        errorMsg.textContent = 'Error loading filter options: ' + err.message;
+      }
+    }
+
+    // Fetch jobs with current filters applied
+    async function fetchJobs() {
+      errorMsg.textContent = '';
+      jobsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+
+      let query = supabase.from('jobs').select('job_id, name, job_type, operator, machine, created_at').order('created_at', { ascending: false });
+
+      // Apply filters dynamically
+      if (filterJobType.value) {
+        query = query.eq('job_type', filterJobType.value);
+      }
+      if (filterOperator.value) {
+        query = query.eq('operator', filterOperator.value);
+      }
+      if (filterMachine.value) {
+        query = query.eq('machine', filterMachine.value);
+      }
+      if (filterDateFrom.value) {
+        query = query.gte('created_at', filterDateFrom.value);
+      }
+      if (filterDateTo.value) {
+        // Add one day to include the entire 'to' date (Supabase uses timestamp with timezone)
+        const toDate = new Date(filterDateTo.value);
+        toDate.setDate(toDate.getDate() + 1);
+        query = query.lt('created_at', toDate.toISOString().slice(0,10));
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        errorMsg.textContent = 'Error fetching jobs: ' + error.message;
+        jobsTableBody.innerHTML = '';
+        lastFetchedJobs = [];
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        jobsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No jobs found</td></tr>';
+        lastFetchedJobs = [];
+        return;
+      }
+
+      lastFetchedJobs = data; // cache for export
+
+      jobsTableBody.innerHTML = data.map(job => `
+        <tr>
+          <td>${job.job_id}</td>
+          <td>${job.name}</td>
+          <td>${job.job_type || ''}</td>
+          <td>${job.operator || ''}</td>
+          <td>${job.machine || ''}</td>
+          <td>${new Date(job.created_at).toLocaleString()}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Convert jobs data to CSV and trigger download
+    function downloadCSV() {
+      if (!lastFetchedJobs.length) {
+        alert('No jobs to download.');
+        return;
+      }
+
+      const headers = ['Job ID', 'Job Name', 'Job Type', 'Operator', 'Machine', 'Created At'];
+      const rows = lastFetchedJobs.map(j => [
+        j.job_id,
+        j.name,
+        j.job_type || '',
+        j.operator || '',
+        j.machine || '',
+        new Date(j.created_at).toLocaleString(),
+      ]);
+
+      const csvContent =
+        [headers, ...rows]
+          .map(e => e.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+          .join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `jobs_report_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Initialize
+    (async () => {
+      await populateFilterOptions();
+      await fetchJobs();
+    })();
+
+    btnFilter.addEventListener('click', fetchJobs);
+    btnDownload.addEventListener('click', downloadCSV);
   </script>
 </body>
 </html>
