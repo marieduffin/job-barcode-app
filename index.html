@@ -27,7 +27,7 @@
     border-radius: 4px;
     font-weight: bold;
     transition: background-color 0.3s ease;
-    min-width: 120px;
+    min-width: 140px;
   }
   nav button.active,
   nav button:hover {
@@ -271,7 +271,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
 <script>
-  // Your Supabase info - replace these with your actual keys
+  // Initialize Supabase first
   const SUPABASE_URL = 'https://vwsqtcsxxzkxcrdcbbky.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA';
   const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -288,12 +288,11 @@
     associate: document.getElementById('associateSection'),
   };
 
-  // Tab switching
+  // Switch tab function
   function switchTab(tabName) {
     Object.keys(tabs).forEach(key => {
-      const isActive = key === tabName;
-      tabs[key].classList.toggle('active', isActive);
-      sections[key].hidden = !isActive;
+      tabs[key].classList.toggle('active', key === tabName);
+      sections[key].hidden = key !== tabName;
     });
     clearMessages();
     if (tabName === 'associate') loadAssociateJobIds();
@@ -304,14 +303,14 @@
   tabs.report.addEventListener('click', () => switchTab('report'));
   tabs.associate.addEventListener('click', () => switchTab('associate'));
 
-  // Clear error & associate messages
+  // Clear messages
   function clearMessages() {
     document.getElementById('errorMessage').textContent = '';
     document.getElementById('associateResult').style.display = 'none';
     document.getElementById('associateList').innerHTML = '';
   }
 
-  // Create Job Section elements
+  // Create Job elements
   const operatorInput = document.getElementById('operatorInput');
   const jobTypeSelect = document.getElementById('jobTypeSelect');
   const machineSelect = document.getElementById('machineSelect');
@@ -322,9 +321,10 @@
   const barcodeSvg = document.getElementById('barcodeSvg');
   const errorMessage = document.getElementById('errorMessage');
 
-  // Set default date to today
+  // Default date is today
   jobDateInput.value = new Date().toISOString().slice(0, 10);
 
+  // Create Job button click
   createBtn.addEventListener('click', async () => {
     clearMessages();
     if (!operatorInput.value.trim() || !jobTypeSelect.value || !machineSelect.value || !jobDateInput.value) {
@@ -334,14 +334,13 @@
     const operator = operatorInput.value.trim();
     const jobType = jobTypeSelect.value;
     const machine = machineSelect.value;
-    const jobDate = jobDateInput.value; // YYYY-MM-DD
+    const jobDate = jobDateInput.value;
 
-    // Extract MMDD from jobDate
     const [year, month, day] = jobDate.split('-');
     const mmdd = month.padStart(2, '0') + day.padStart(2, '0');
 
     try {
-      // Fetch existing jobs with matching pattern jobType + machine + MMDD + J + number
+      // Query for existing jobs for this type, machine, and date
       const { data: existingJobs, error: fetchError } = await supabase
         .from('MoveComplyReport_md')
         .select('job_id')
@@ -356,21 +355,21 @@
           if (seqNum > maxSeq) maxSeq = seqNum;
         }
       });
+
       const nextSeq = maxSeq + 1;
       const jobId = `${jobType}${machine}${mmdd}J${nextSeq}`;
 
-      // Insert the new job record
+      // Insert new job
       const { error: insertError } = await supabase
         .from('MoveComplyReport_md')
         .insert([{ job_id: jobId, operator, job_type: jobType, machine, job_date: jobDate }]);
       if (insertError) throw insertError;
 
-      // Show the barcode and job ID
+      // Show result
       jobIdDisplay.textContent = jobId;
       JsBarcode(barcodeSvg, jobId, { format: 'CODE128', width: 2, height: 80 });
       resultDiv.style.display = 'block';
 
-      // Clear inputs except date for fast entry
       operatorInput.value = '';
       jobTypeSelect.value = '';
       machineSelect.value = '';
@@ -379,7 +378,7 @@
     }
   });
 
-  // Report section elements
+  // Report filters and elements
   const filterJobType = document.getElementById('filterJobType');
   const filterOperator = document.getElementById('filterOperator');
   const filterMachine = document.getElementById('filterMachine');
@@ -389,6 +388,7 @@
   const downloadCsvBtn = document.getElementById('downloadCsvBtn');
   const reportTableBody = document.querySelector('#reportTable tbody');
 
+  // Load report data
   async function loadReport() {
     let query = supabase.from('MoveComplyReport_md').select('job_id, job_type, operator, machine, job_date');
 
@@ -485,11 +485,12 @@
       const uniqueJobIds = new Set();
 
       data.forEach(item => {
-        if (/^[LMA]\d{5}J\d+$/.test(item.job_id)) {
+        if (/^[LMA]\d{1}\d{4}J\d+$/.test(item.job_id)) {
           uniqueJobIds.add(item.job_id);
         }
       });
 
+      // Sort descending by job_id string
       const sortedJobIds = Array.from(uniqueJobIds).sort((a,b) => b.localeCompare(a));
 
       sortedJobIds.forEach(jid => {
@@ -513,7 +514,7 @@
       alert('Please select a base Job ID.');
       return;
     }
-    if (!/^[LMA]\d{5}J\d+$/.test(baseJobId)) {
+    if (!/^[LMA]\d{1}\d{4}J\d+$/.test(baseJobId)) {
       alert('Selected Job ID format is invalid. Expected format like L10625J2.');
       return;
     }
@@ -527,14 +528,15 @@
       return;
     }
 
-    const baseMatch = baseJobId.match(/^([LMA])(\d{1})(\d{4})J(\d+)$/);
+    // Parse baseJobId parts: jobType, machine(1 digit), mmdd(4 digits), seq number
+    const baseMatch = baseJobId.match(/^([LMA])(\d)(\d{4})J(\d+)$/);
     if (!baseMatch) {
       alert('Selected Job ID format is invalid. Expected format like L10625J2.');
       return;
     }
     const [_, baseType, machine, mmdd, seq] = baseMatch;
 
-    // Filter out baseType from selectedTypes
+    // Filter out baseType from selectedTypes so we don't recreate the same job type
     const jobTypesToCreate = selectedTypes.filter(t => t !== baseType);
 
     if (jobTypesToCreate.length === 0) {
@@ -546,17 +548,17 @@
       for (const jt of jobTypesToCreate) {
         const newJobId = `${jt}${machine}${mmdd}J${seq}`;
 
-        // Check if job exists
+        // Check if job already exists
         const { data: existing, error: existingErr } = await supabase
           .from('MoveComplyReport_md')
           .select('id')
           .eq('job_id', newJobId)
           .single();
 
-        // If error is "Not found" that's okay; else throw
         if (existingErr && !existingErr.message.includes('No rows')) throw existingErr;
 
         if (!existing) {
+          // Insert associated job with operator 'Associated'
           await supabase
             .from('MoveComplyReport_md')
             .insert([{
@@ -564,7 +566,7 @@
               operator: 'Associated',
               job_type: jt,
               machine,
-              job_date: `${'20' + new Date().getFullYear().toString().slice(2)}-${mmdd.slice(0,2)}-${mmdd.slice(2,4)}`
+              job_date: `${new Date().getFullYear()}-${mmdd.slice(0,2)}-${mmdd.slice(2,4)}`
             }]);
           const li = document.createElement('li');
           li.textContent = `Created associated Job ID: ${newJobId}`;
@@ -581,7 +583,7 @@
     }
   });
 
-  // Barcode Modal
+  // Barcode Modal elements
   const barcodeModal = document.getElementById('barcodeModal');
   const modalJobIdSpan = document.getElementById('modalJobId');
   const modalBarcodeSvg = document.getElementById('modalBarcode');
@@ -606,7 +608,7 @@
     }
   });
 
-  // Utility: Map job_type code to full name for display
+  // Helper function to display full job type names
   function getJobTypeFullName(code) {
     return {
       L: 'Letters (L)',
@@ -618,7 +620,7 @@
     }[code] || code;
   }
 
-  // Initialize with Create tab active
+  // On load, show Create tab
   switchTab('create');
 </script>
 </body>
