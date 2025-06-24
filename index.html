@@ -124,9 +124,7 @@
     <label>Select Existing Job (L, M or A)</label>
     <select id="existingJobSelect"></select>
     <label>Select Job Types to Associate</label>
-    <div id="assocCheckboxes">
-      <!-- checkboxes inserted here dynamically -->
-    </div>
+    <div id="assocCheckboxes"></div>
     <button class="submit-btn" id="associateBtn">Generate Associated Job IDs</button>
     <div id="associateResult" class="barcode" style="display:none;"></div>
   </div>
@@ -375,4 +373,26 @@
       const csvContent = [header, ...csvRows].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.create
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'job_report.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Modal functions
+    const modal = document.getElementById('barcodeModal');
+    const modalJobId = document.getElementById('modalJobId');
+    const modalBarcode = document.getElementById('modalBarcode');
+
+    function showBarcodeModal(jobId) {
+      modalJobId.textContent = jobId;
+      JsBarcode(modalBarcode, jobId, { format:'CODE128', width:2, height:80 });
+      modal.style.display = 'flex';
+      modal.setAttribute('aria-hidden', 'false');
+    }
+    function closeModal() {
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true
