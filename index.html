@@ -147,16 +147,40 @@
 
         const [y, m, d] = dt.split('-');
         const mmdd = m.padStart(2, '0') + d.padStart(2, '0');
-        // sequence per job type + date
-        const key = `seq_${jt}_${dt}`;
-        let seq = parseInt(localStorage.getItem(key) || '0', 10);
-        seq++;
-        localStorage.setItem(key, seq);
+
+        // Query existing jobs with same job_type and job_date
+        let { data: existingJobs, error } = await client
+          .from('jobs')
+          .select('job_id')
+          .eq('job_type', jt)
+          .eq('job_date', dt);
+
+        if (error) {
+          alert('Error checking existing jobs: ' + error.message);
+          return;
+        }
+
+        // Extract existing sequence numbers from job_id strings
+        // job_id format: jt + mc + mmdd + 'J' + seq
+        // example: L11222J3 -> seq = 3
+        let maxSeq = 0;
+        if (existingJobs && existingJobs.length) {
+          existingJobs.forEach(({ job_id }) => {
+            const seqMatch = job_id.match(/J(\d+)$/);
+            if (seqMatch) {
+              const seqNum = parseInt(seqMatch[1], 10);
+              if (seqNum > maxSeq) maxSeq = seqNum;
+            }
+          });
+        }
+        const seq = maxSeq + 1;
+
         const jobId = jt + mc + mmdd + 'J' + seq;
         jobIdText.textContent = jobId;
         result.style.display = 'block';
         JsBarcode(barcodeSvg, jobId, { format: 'CODE128', width: 2, height: 80 });
 
+        // Insert new job record into Supabase
         await client.from('jobs').insert([{ job_id: jobId, job_type: jt, operator: op, machine: mc, job_date: dt }]);
       });
 
