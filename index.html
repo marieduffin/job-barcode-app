@@ -395,4 +395,196 @@
     }
     function closeModal() {
       modal.style.display = 'none';
-      modal.setAttribute('aria-hidden', 'true
+      modal.setAttribute('aria-hidden', 'true');
+      modalBarcode.innerHTML = '';
+      modalJobId.textContent = '';
+    }
+    modal.addEventListener('click', (e) => {
+      if(e.target === modal) closeModal();
+    });
+
+    // -------------- ASSOCIATE JOB TYPES ---------------
+    const existingJobSelect = document.getElementById('existingJobSelect');
+    const assocCheckboxesDiv = document.getElementById('assocCheckboxes');
+    const associateBtn = document.getElementById('associateBtn');
+    const associateResultDiv = document.getElementById('associateResult');
+
+    // Load existing L, M, A jobs for dropdown
+    async function loadExistingJobs() {
+      associateResultDiv.style.display = 'none';
+      assocCheckboxesDiv.innerHTML = '';
+      existingJobSelect.innerHTML = '<option value="">-- Select Job --</option>';
+
+      // Fetch jobs with job_type in L, M, A ordered by created desc
+      const { data, error } = await client.from('jobs')
+        .select('job_id, job_type, job_date, machine')
+        .in('job_type', ['L','M','A'])
+        .order('created_at', { ascending: false })
+        .limit(200); // limit to recent 200 for performance
+
+      if(error) {
+        alert('Error loading existing jobs: ' + error.message);
+        return;
+      }
+
+      // Fill dropdown with job_id labeled with job type and date
+      data.forEach(j => {
+        const option = document.createElement('option');
+        option.value = j.job_id;
+        option.textContent = `${j.job_id} (Type: ${j.job_type}, Date: ${j.job_date})`;
+        existingJobSelect.appendChild(option);
+      });
+
+      assocCheckboxesDiv.innerHTML = '';
+    }
+
+    // When user selects a job, show checkboxes for other job types
+    existingJobSelect.addEventListener('change', () => {
+      associateResultDiv.style.display = 'none';
+      assocCheckboxesDiv.innerHTML = '';
+
+      const selectedJobId = existingJobSelect.value;
+      if (!selectedJobId) return;
+
+      // Extract job type from job id (first char)
+      const match = selectedJobId.match(/^([LMA])/);
+      if(!match) {
+        alert('Selected Job ID format invalid. Must start with L, M, or A.');
+        return;
+      }
+      const selectedType = match[1];
+
+      // Show checkboxes for job types except the selected one
+      const allTypes = ['L','M','A'];
+      const otherTypes = allTypes.filter(t => t !== selectedType);
+
+      otherTypes.forEach(t => {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = t;
+        checkbox.name = 'assocJobType';
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(` ${t}`));
+        assocCheckboxesDiv.appendChild(label);
+      });
+    });
+
+    associateBtn.addEventListener('click', async () => {
+      associateResultDiv.style.display = 'none';
+      associateResultDiv.innerHTML = '';
+
+      const selectedJobId = existingJobSelect.value;
+      if (!selectedJobId) {
+        alert('Please select an existing job to associate.');
+        return;
+      }
+
+      // Get selected job types from checkboxes
+      const checkedBoxes = Array.from(document.querySelectorAll('input[name="assocJobType"]:checked'));
+      if (checkedBoxes.length === 0) {
+        alert('Please select at least one job type to associate.');
+        return;
+      }
+
+      // Extract base info from selected job ID: type, machine, date, sequence
+      // Format: e.g. L10625J2
+      // Pattern: JobType (L|M|A) + MachineDigit + MMDD + J + SequenceDigit(s)
+      const jobIdMatch = selectedJobId.match(/^([LMA])(\d)(\d{4})J(\d+)$/);
+      if(!jobIdMatch) {
+        alert('Selected Job ID format is invalid. Expected format like L10625J2.');
+        return;
+      }
+      const [_, originalType, machine, mmdd, seq] = jobIdMatch;
+
+      // Compute job_date from mmdd (month & day) and current year
+      const nowYear = new Date().getFullYear();
+      const jobDateStr = `${nowYear}-${mmdd.substring(0,2)}-${mmdd.substring(2,4)}`;
+
+      // For each selected job type:
+      // - Check if job exists for that type + machine + date + sequence
+      // - If exists, include it in results
+      // - If not, create it with operator 'assoc', created_at now
+      // - Job ID format: [jobType][machine][mmdd]J[seq]
+      const createdJobs = [];
+      const errors = [];
+
+      for(const newTypeCheckbox of checkedBoxes) {
+        const newType = newTypeCheckbox.value;
+        const newJobId = `${newType}${machine}${mmdd}J${seq}`;
+
+        // Check if this job ID exists
+        const { data: existingJobs, error } = await client.from('jobs')
+          .select('*')
+          .eq('job_id', newJobId)
+          .limit(1);
+
+        if(error) {
+          errors.push(`Error checking job ${newJobId}: ${error.message}`);
+          continue;
+        }
+
+        if(existingJobs.length > 0) {
+          // Already exists, just add to results
+          createdJobs.push(existingJobs[0]);
+          continue;
+        }
+
+        // Create new job
+        const { error: insertErr } = await client.from('jobs').insert([{
+          job_id: newJobId,
+          job_type: newType,
+          operator: 'assoc', // system/operator name could be enhanced here
+          machine: machine,
+          job_date: jobDateStr,
+          created_at: new Date().toISOString()
+        }]);
+
+        if(insertErr) {
+          errors.push(`Error creating job ${newJobId}: ${insertErr.message}`);
+          continue;
+        }
+
+        // Fetch inserted record to show
+        const { data: newJobData, error: fetchErr } = await client.from('jobs')
+          .select('*').eq('job_id', newJobId).limit(1);
+
+        if(fetchErr || newJobData.length === 0) {
+          errors.push(`Created job ${newJobId} but failed to fetch it.`);
+          continue;
+        }
+
+        createdJobs.push(newJobData[0]);
+      }
+
+      // Display results with barcodes
+      if(errors.length > 0) {
+        alert(errors.join('\n'));
+      }
+      if(createdJobs.length === 0) {
+        associateResultDiv.style.display = 'none';
+        return;
+      }
+
+      associateResultDiv.innerHTML = '';
+      for(const job of createdJobs) {
+        const div = document.createElement('div');
+        div.style.marginBottom = '20px';
+
+        const title = document.createElement('div');
+        title.textContent = `Job ID: ${job.job_id}`;
+        title.style.fontWeight = 'bold';
+        div.appendChild(title);
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.style.marginTop = '5px';
+        JsBarcode(svg, job.job_id, { format:'CODE128', width:2, height:80 });
+        div.appendChild(svg);
+
+        associateResultDiv.appendChild(div);
+      }
+      associateResultDiv.style.display = 'block';
+    });
+  </script>
+</body>
+</html>
