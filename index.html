@@ -1,3 +1,273 @@
+
 <!DOCTYPE html>
-<!-- The full, final index.html content goes here. For brevity, it's not shown in this placeholder. -->
-<html><head><title>Placeholder</title></head><body>Final version placeholder</body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Job Barcode App</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f8f9fa;
+    }
+    header {
+      background-color: #00407A;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+    }
+    .tabs {
+      display: flex;
+      background: #ddd;
+    }
+    .tabs button {
+      flex: 1;
+      padding: 1rem;
+      background: #ddd;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .tabs button.active {
+      background: #ffffff;
+      border-bottom: 2px solid #00407A;
+    }
+    .tab-content {
+      display: none;
+      padding: 2rem;
+    }
+    .tab-content.active {
+      display: block;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    .barcode-container {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .error {
+      color: red;
+      font-size: 0.9em;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .filters div {
+      flex: 1;
+      min-width: 160px;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header><h1>Job Barcode App</h1></header>
+
+  <div class="tabs">
+    <button class="active" onclick="showTab(0)">Create Job</button>
+    <button onclick="showTab(1)">Associate Job Types</button>
+    <button onclick="showTab(2)">Reports</button>
+  </div>
+
+  <div class="tab-content active" id="tab0">
+    <label>Operator *</label><input id="operator">
+    <label>Job Type *</label>
+    <select id="jobType">
+      <option value="">Select</option>
+      <option value="L">First Class Letters (L)</option>
+      <option value="M">Machinable Letters (M)</option>
+      <option value="A">All, Merge Letter Jobs (A)</option>
+      <option value="F">First Class Flats (F)</option>
+      <option value="D">Standard Flats (D)</option>
+      <option value="T">Standard Letters (T)</option>
+    </select>
+    <label>Machine *</label>
+    <select id="machine">
+      <option value="">Select</option>
+      <option value="1">OCR 1</option>
+      <option value="2">OCR 2</option>
+    </select>
+    <label>Date *</label><input type="date" id="jobDate">
+    <div id="createError" class="error"></div>
+    <button onclick="createJob()">Create Job</button>
+    <div class="barcode-container" id="barcodeSection" style="display:none;">
+      <h3 id="jobIdDisplay"></h3>
+      <svg id="barcode"></svg>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab1">
+    <label>Select Base Job ID</label>
+    <select id="existingJobSelector"></select>
+    <label>Generate for:</label>
+    <input type="checkbox" id="assocM"> M (Machinable Letters)<br>
+    <input type="checkbox" id="assocA"> A (All, Merge Jobs)<br>
+    <button onclick="associateJobs()">Generate Associated Job(s)</button>
+    <div class="barcode-container" id="assocBarcodeSection" style="display:none;">
+      <h3 id="assocJobIdDisplay"></h3>
+      <svg id="assocBarcode"></svg>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab2">
+    <div class="filters">
+      <div><label>Operator</label><input id="filterOperator"></div>
+      <div><label>Job Type</label><select id="filterType"><option value="">All</option><option>L</option><option>M</option><option>A</option><option>F</option><option>D</option><option>T</option></select></div>
+      <div><label>Machine</label><select id="filterMachine"><option value="">All</option><option>1</option><option>2</option></select></div>
+      <div><label>Date From</label><input type="date" id="filterFrom"></div>
+      <div><label>Date To</label><input type="date" id="filterTo"></div>
+    </div>
+    <button onclick="loadJobs()">Refresh</button>
+    <button onclick="downloadCSV()">Download CSV</button>
+    <table><thead><tr><th>Job ID</th><th>Operator</th><th>Type</th><th>Machine</th><th>Date</th></tr></thead>
+    <tbody id="jobTable"></tbody></table>
+  </div>
+
+  <div class="modal" id="barcodeModal" onclick="this.style.display='none'">
+    <div class="modal-content"><h3 id="modalJobId"></h3><svg id="modalBarcode"></svg></div>
+  </div>
+
+  <script>
+    const url = "https://vwsqtcsxxzkxcrdcbbky.supabase.co";
+    const key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA";
+    const headers = { apikey: key, Authorization: "Bearer " + key, "Content-Type": "application/json" };
+
+    function showTab(n) {
+      document.querySelectorAll(".tab-content").forEach((tab, i) => {
+        tab.classList.toggle("active", i === n);
+        document.querySelectorAll(".tabs button")[i].classList.toggle("active", i === n);
+      });
+    }
+
+    async function createJob() {
+      const op = val("operator"), jt = val("jobType"), mach = val("machine"), date = val("jobDate");
+      const errorDiv = document.getElementById("createError");
+      errorDiv.textContent = "";
+      if (!op || !jt || !mach || !date) return errorDiv.textContent = "Please fill in all fields.";
+      const mmdd = date.slice(5).replace("-", "");
+      const res = await fetch(`${url}/rest/v1/jobs?job_type=eq.${jt}&job_date=eq.${date}`, { headers });
+      const data = await res.json();
+      const seq = data.length + 1;
+      const jobId = `${jt}${mach}${mmdd}J${seq}`;
+      await fetch(`${url}/rest/v1/jobs`, { method: "POST", headers, body: JSON.stringify({ operator: op, job_type: jt, machine: mach, job_date: date, job_id: jobId }) });
+      JsBarcode("#barcode", jobId);
+      document.getElementById("jobIdDisplay").textContent = jobId;
+      document.getElementById("barcodeSection").style.display = "block";
+      loadJobs();
+      loadAssociations();
+    }
+
+    function val(id) { return document.getElementById(id).value.trim(); }
+
+    async function loadJobs() {
+      const res = await fetch(`${url}/rest/v1/jobs?select=*`, { headers });
+      const all = await res.json();
+      const op = val("filterOperator").toLowerCase(), jt = val("filterType"), mach = val("filterMachine"), from = val("filterFrom"), to = val("filterTo");
+      const filtered = all.filter(r =>
+        (!op || r.operator?.toLowerCase().includes(op)) &&
+        (!jt || r.job_type === jt) &&
+        (!mach || r.machine === mach) &&
+        (!from || r.job_date >= from) &&
+        (!to || r.job_date <= to)
+      );
+      const tbody = document.getElementById("jobTable");
+      tbody.innerHTML = filtered.map(r =>
+        `<tr><td><a href="#" onclick="showBarcode('${r.job_id}');return false;">${r.job_id}</a></td><td>${r.operator}</td><td>${r.job_type}</td><td>${r.machine}</td><td>${r.job_date}</td></tr>`
+      ).join("");
+    }
+
+    function showBarcode(id) {
+      JsBarcode("#modalBarcode", id);
+      document.getElementById("modalJobId").textContent = id;
+      document.getElementById("barcodeModal").style.display = "flex";
+    }
+
+    async function loadAssociations() {
+      const res = await fetch(`${url}/rest/v1/jobs?select=*`, { headers });
+      const jobs = await res.json();
+      const baseJobs = jobs.filter(j => ["L", "M", "A"].includes(j.job_type)).sort((a,b) => b.job_id.localeCompare(a.job_id));
+      const sel = document.getElementById("existingJobSelector");
+      sel.innerHTML = baseJobs.map(j => `<option value="${j.job_id}">${j.job_id}</option>`).join("");
+    }
+
+    async function associateJobs() {
+      const base = val("existingJobSelector");
+      const m = document.getElementById("assocM").checked;
+      const a = document.getElementById("assocA").checked;
+      const origType = base[0], mach = base[1], mmdd = base.slice(2, 6), suffix = base.slice(6);
+      const date = new Date().toISOString().slice(0,10);
+      if (m) await makeAssoc("M", mach, mmdd, suffix, date);
+      if (a) await makeAssoc("A", mach, mmdd, suffix, date);
+      loadJobs(); loadAssociations();
+    }
+
+    async function makeAssoc(jt, mach, mmdd, suffix, date) {
+      const newId = jt + mach + mmdd + suffix;
+      const res = await fetch(`${url}/rest/v1/jobs?job_id=eq.${newId}`, { headers });
+      const exists = await res.json();
+      if (exists.length) {
+        JsBarcode("#assocBarcode", newId);
+        document.getElementById("assocJobIdDisplay").textContent = newId + " already exists.";
+      } else {
+        await fetch(`${url}/rest/v1/jobs`, { method: "POST", headers, body: JSON.stringify({ operator: "associated", job_type: jt, machine: mach, job_date: date, job_id: newId }) });
+        JsBarcode("#assocBarcode", newId);
+        document.getElementById("assocJobIdDisplay").textContent = "Created " + newId;
+      }
+      document.getElementById("assocBarcodeSection").style.display = "block";
+    }
+
+    function downloadCSV() {
+      const rows = [["Job ID", "Operator", "Type", "Machine", "Date"]];
+      document.querySelectorAll("#jobTable tr").forEach(tr => {
+        const cells = Array.from(tr.children).map(td => td.textContent);
+        rows.push(cells);
+      });
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "job_report.csv";
+      a.click();
+    }
+
+    loadJobs();
+    loadAssociations();
+  </script>
+</body>
+</html>
