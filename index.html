@@ -1,273 +1,516 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Job Barcode App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Job ID Automation App</title>
   <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body {
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
+      background: #f9fafb;
+      color: #333;
       margin: 0;
-      padding: 0;
-      background: #f8f9fa;
+      padding: 20px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
     }
-    header {
-      background-color: #00407A;
-      color: white;
-      padding: 1rem;
+    h1 {
+      color: #00407A;
+      font-size: 1.8em;
+      margin-bottom: 15px;
       text-align: center;
     }
-    .tabs {
+    /* Navigation styles */
+    nav {
       display: flex;
-      background: #ddd;
+      justify-content: center;
+      margin-bottom: 25px;
+      border-bottom: 2px solid #ccc;
     }
-    .tabs button {
-      flex: 1;
-      padding: 1rem;
-      background: #ddd;
+    nav button {
+      background: none;
       border: none;
+      padding: 12px 20px;
+      font-size: 1.1em;
       cursor: pointer;
+      color: #00407A;
+      border-bottom: 3px solid transparent;
+      transition: border-color 0.3s;
+      margin: 0 10px;
+    }
+    nav button.active {
+      border-color: #E87722;
       font-weight: bold;
     }
-    .tabs button.active {
-      background: #ffffff;
-      border-bottom: 2px solid #00407A;
+    nav button:hover:not(.active) {
+      color: #d56c1e;
     }
-    .tab-content {
-      display: none;
-      padding: 2rem;
+
+    /* Container styling */
+    .container {
+      background: #fff;
+      padding: 20px 25px 30px 25px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-    .tab-content.active {
-      display: block;
-    }
+
+    /* Common label/input styles */
     label {
       display: block;
-      margin-top: 10px;
+      margin-top: 12px;
+      font-weight: 600;
     }
-    input, select, button {
+    input[type="text"], input[type="date"], select {
       width: 100%;
-      padding: 8px;
-      margin-top: 5px;
-      margin-bottom: 10px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
+      padding: 8px 10px;
+      margin-top: 6px;
       border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
+      border-radius: 4px;
+      font-size: 1em;
+      box-sizing: border-box;
     }
-    .barcode-container {
-      text-align: center;
+    button.primary {
+      background: #E87722;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 12px;
       margin-top: 20px;
+      font-size: 1.1em;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.3s;
     }
-    .error {
+    button.primary:hover {
+      background: #d56c1e;
+    }
+
+    /* Barcode display */
+    .barcode {
+      text-align: center;
+      margin-top: 25px;
+    }
+
+    /* Error message */
+    #errorMsg {
       color: red;
-      font-size: 0.9em;
+      margin-top: 15px;
+      font-weight: 600;
+      min-height: 20px;
+      text-align: center;
     }
+
+    /* Reporting section styles */
     .filters {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 15px 20px;
+      margin-bottom: 15px;
+      align-items: flex-end;
+      justify-content: space-between;
     }
-    .filters div {
-      flex: 1;
-      min-width: 160px;
+    .filter-group {
+      flex: 1 1 160px;
+      min-width: 150px;
     }
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
+    .filter-group label {
+      margin-bottom: 6px;
+    }
+    .filter-buttons {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    .filter-buttons button {
+      width: auto;
+      min-width: 130px;
+    }
+    /* Table styles */
+    table {
       width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.6);
-      justify-content: center;
-      align-items: center;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.9em;
     }
-    .modal-content {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      text-align: center;
+    th, td {
+      border: 1px solid #aaa;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #eee;
+    }
+    /* Responsive */
+    @media (max-width: 600px) {
+      .filters {
+        flex-direction: column;
+      }
+      .filter-group {
+        min-width: 100%;
+      }
+      .filter-buttons {
+        justify-content: center;
+      }
+      nav {
+        flex-wrap: wrap;
+      }
+      nav button {
+        margin: 5px 10px;
+        flex: 1 1 45%;
+      }
     }
   </style>
 </head>
 <body>
-  <header><h1>Job Barcode App</h1></header>
 
-  <div class="tabs">
-    <button class="active" onclick="showTab(0)">Create Job</button>
-    <button onclick="showTab(1)">Associate Job Types</button>
-    <button onclick="showTab(2)">Reports</button>
-  </div>
+  <h1>Job ID Automation App</h1>
 
-  <div class="tab-content active" id="tab0">
-    <label>Operator *</label><input id="operator">
-    <label>Job Type *</label>
-    <select id="jobType">
-      <option value="">Select</option>
+  <nav>
+    <button id="tabCreate" class="active" aria-controls="createSection" aria-selected="true" role="tab">Create Job</button>
+    <button id="tabReport" aria-controls="reportSection" aria-selected="false" role="tab">Job Reports</button>
+  </nav>
+
+  <!-- Create Job Section -->
+  <section id="createSection" class="container" role="tabpanel" aria-labelledby="tabCreate">
+    <label for="operator">Operator</label>
+    <input id="operator" type="text" placeholder="Your name" autocomplete="off" />
+
+    <label for="jobType">Job Type</label>
+    <select id="jobType" aria-label="Job Type">
+      <option value="">-- select --</option>
       <option value="L">First Class Letters (L)</option>
       <option value="M">Machinable Letters (M)</option>
-      <option value="A">All, Merge Letter Jobs (A)</option>
+      <option value="A">Merge FC & Machinable (A)</option>
       <option value="F">First Class Flats (F)</option>
       <option value="D">Standard Flats (D)</option>
       <option value="T">Standard Letters (T)</option>
     </select>
-    <label>Machine *</label>
-    <select id="machine">
-      <option value="">Select</option>
+
+    <label for="machine">Machine Number</label>
+    <select id="machine" aria-label="Machine Number">
+      <option value="">-- select --</option>
       <option value="1">OCR 1</option>
       <option value="2">OCR 2</option>
     </select>
-    <label>Date *</label><input type="date" id="jobDate">
-    <div id="createError" class="error"></div>
-    <button onclick="createJob()">Create Job</button>
-    <div class="barcode-container" id="barcodeSection" style="display:none;">
-      <h3 id="jobIdDisplay"></h3>
+
+    <label for="jobDate">Date</label>
+    <input id="jobDate" type="date" />
+
+    <button id="createBtn" class="primary">Create Job</button>
+
+    <p id="createErrorMsg"></p>
+
+    <div id="result" class="barcode" style="display:none;">
+      <div>Job ID: <strong id="jobIdText"></strong></div>
       <svg id="barcode"></svg>
     </div>
-  </div>
+  </section>
 
-  <div class="tab-content" id="tab1">
-    <label>Select Base Job ID</label>
-    <select id="existingJobSelector"></select>
-    <label>Generate for:</label>
-    <input type="checkbox" id="assocM"> M (Machinable Letters)<br>
-    <input type="checkbox" id="assocA"> A (All, Merge Jobs)<br>
-    <button onclick="associateJobs()">Generate Associated Job(s)</button>
-    <div class="barcode-container" id="assocBarcodeSection" style="display:none;">
-      <h3 id="assocJobIdDisplay"></h3>
-      <svg id="assocBarcode"></svg>
+  <!-- Reporting Section -->
+  <section id="reportSection" class="container" role="tabpanel" aria-labelledby="tabReport" hidden>
+    <div class="filters" role="region" aria-label="Job Filters">
+      <div class="filter-group">
+        <label for="filterJobType">Job Type</label>
+        <select id="filterJobType" aria-label="Filter by Job Type">
+          <option value="">All</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterOperator">Operator</label>
+        <select id="filterOperator" aria-label="Filter by Operator">
+          <option value="">All</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterMachine">Machine</label>
+        <select id="filterMachine" aria-label="Filter by Machine">
+          <option value="">All</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterDateFrom">Date From</label>
+        <input type="date" id="filterDateFrom" aria-label="Filter start date" />
+      </div>
+      <div class="filter-group">
+        <label for="filterDateTo">Date To</label>
+        <input type="date" id="filterDateTo" aria-label="Filter end date" />
+      </div>
+      <div class="filter-buttons">
+        <button id="btnFilter" class="primary" aria-label="Apply Filters">Apply Filters</button>
+        <button id="btnDownload" class="primary" aria-label="Download CSV">Download CSV</button>
+      </div>
     </div>
-  </div>
 
-  <div class="tab-content" id="tab2">
-    <div class="filters">
-      <div><label>Operator</label><input id="filterOperator"></div>
-      <div><label>Job Type</label><select id="filterType"><option value="">All</option><option>L</option><option>M</option><option>A</option><option>F</option><option>D</option><option>T</option></select></div>
-      <div><label>Machine</label><select id="filterMachine"><option value="">All</option><option>1</option><option>2</option></select></div>
-      <div><label>Date From</label><input type="date" id="filterFrom"></div>
-      <div><label>Date To</label><input type="date" id="filterTo"></div>
-    </div>
-    <button onclick="loadJobs()">Refresh</button>
-    <button onclick="downloadCSV()">Download CSV</button>
-    <table><thead><tr><th>Job ID</th><th>Operator</th><th>Type</th><th>Machine</th><th>Date</th></tr></thead>
-    <tbody id="jobTable"></tbody></table>
-  </div>
+    <table id="jobsTable" aria-label="Jobs report table">
+      <thead>
+        <tr>
+          <th>Job ID</th>
+          <th>Job Name</th>
+          <th>Job Type</th>
+          <th>Operator</th>
+          <th>Machine</th>
+          <th>Created At</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="6" style="text-align:center;">Loading...</td></tr>
+      </tbody>
+    </table>
 
-  <div class="modal" id="barcodeModal" onclick="this.style.display='none'">
-    <div class="modal-content"><h3 id="modalJobId"></h3><svg id="modalBarcode"></svg></div>
-  </div>
+    <p id="reportErrorMsg"></p>
+  </section>
 
   <script>
-    const url = "https://vwsqtcsxxzkxcrdcbbky.supabase.co";
-    const key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA";
-    const headers = { apikey: key, Authorization: "Bearer " + key, "Content-Type": "application/json" };
+    // Supabase config
+    const supabaseUrl = 'https://vwsqtcsxxzkxcrdcbbky.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA';
+    const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-    function showTab(n) {
-      document.querySelectorAll(".tab-content").forEach((tab, i) => {
-        tab.classList.toggle("active", i === n);
-        document.querySelectorAll(".tabs button")[i].classList.toggle("active", i === n);
-      });
-    }
+    // Tabs logic
+    const tabCreate = document.getElementById('tabCreate');
+    const tabReport = document.getElementById('tabReport');
+    const createSection = document.getElementById('createSection');
+    const reportSection = document.getElementById('reportSection');
 
-    async function createJob() {
-      const op = val("operator"), jt = val("jobType"), mach = val("machine"), date = val("jobDate");
-      const errorDiv = document.getElementById("createError");
-      errorDiv.textContent = "";
-      if (!op || !jt || !mach || !date) return errorDiv.textContent = "Please fill in all fields.";
-      const mmdd = date.slice(5).replace("-", "");
-      const res = await fetch(`${url}/rest/v1/jobs?job_type=eq.${jt}&job_date=eq.${date}`, { headers });
-      const data = await res.json();
-      const seq = data.length + 1;
-      const jobId = `${jt}${mach}${mmdd}J${seq}`;
-      await fetch(`${url}/rest/v1/jobs`, { method: "POST", headers, body: JSON.stringify({ operator: op, job_type: jt, machine: mach, job_date: date, job_id: jobId }) });
-      JsBarcode("#barcode", jobId);
-      document.getElementById("jobIdDisplay").textContent = jobId;
-      document.getElementById("barcodeSection").style.display = "block";
-      loadJobs();
-      loadAssociations();
-    }
+    function activateTab(tab) {
+      if (tab === 'create') {
+        tabCreate.classList.add('active');
+        tabCreate.setAttribute('aria-selected', 'true');
+        createSection.hidden = false;
 
-    function val(id) { return document.getElementById(id).value.trim(); }
-
-    async function loadJobs() {
-      const res = await fetch(`${url}/rest/v1/jobs?select=*`, { headers });
-      const all = await res.json();
-      const op = val("filterOperator").toLowerCase(), jt = val("filterType"), mach = val("filterMachine"), from = val("filterFrom"), to = val("filterTo");
-      const filtered = all.filter(r =>
-        (!op || r.operator?.toLowerCase().includes(op)) &&
-        (!jt || r.job_type === jt) &&
-        (!mach || r.machine === mach) &&
-        (!from || r.job_date >= from) &&
-        (!to || r.job_date <= to)
-      );
-      const tbody = document.getElementById("jobTable");
-      tbody.innerHTML = filtered.map(r =>
-        `<tr><td><a href="#" onclick="showBarcode('${r.job_id}');return false;">${r.job_id}</a></td><td>${r.operator}</td><td>${r.job_type}</td><td>${r.machine}</td><td>${r.job_date}</td></tr>`
-      ).join("");
-    }
-
-    function showBarcode(id) {
-      JsBarcode("#modalBarcode", id);
-      document.getElementById("modalJobId").textContent = id;
-      document.getElementById("barcodeModal").style.display = "flex";
-    }
-
-    async function loadAssociations() {
-      const res = await fetch(`${url}/rest/v1/jobs?select=*`, { headers });
-      const jobs = await res.json();
-      const baseJobs = jobs.filter(j => ["L", "M", "A"].includes(j.job_type)).sort((a,b) => b.job_id.localeCompare(a.job_id));
-      const sel = document.getElementById("existingJobSelector");
-      sel.innerHTML = baseJobs.map(j => `<option value="${j.job_id}">${j.job_id}</option>`).join("");
-    }
-
-    async function associateJobs() {
-      const base = val("existingJobSelector");
-      const m = document.getElementById("assocM").checked;
-      const a = document.getElementById("assocA").checked;
-      const origType = base[0], mach = base[1], mmdd = base.slice(2, 6), suffix = base.slice(6);
-      const date = new Date().toISOString().slice(0,10);
-      if (m) await makeAssoc("M", mach, mmdd, suffix, date);
-      if (a) await makeAssoc("A", mach, mmdd, suffix, date);
-      loadJobs(); loadAssociations();
-    }
-
-    async function makeAssoc(jt, mach, mmdd, suffix, date) {
-      const newId = jt + mach + mmdd + suffix;
-      const res = await fetch(`${url}/rest/v1/jobs?job_id=eq.${newId}`, { headers });
-      const exists = await res.json();
-      if (exists.length) {
-        JsBarcode("#assocBarcode", newId);
-        document.getElementById("assocJobIdDisplay").textContent = newId + " already exists.";
+        tabReport.classList.remove('active');
+        tabReport.setAttribute('aria-selected', 'false');
+        reportSection.hidden = true;
       } else {
-        await fetch(`${url}/rest/v1/jobs`, { method: "POST", headers, body: JSON.stringify({ operator: "associated", job_type: jt, machine: mach, job_date: date, job_id: newId }) });
-        JsBarcode("#assocBarcode", newId);
-        document.getElementById("assocJobIdDisplay").textContent = "Created " + newId;
+        tabReport.classList.add('active');
+        tabReport.setAttribute('aria-selected', 'true');
+        reportSection.hidden = false;
+
+        tabCreate.classList.remove('active');
+        tabCreate.setAttribute('aria-selected', 'false');
+        createSection.hidden = true;
+
+        // Refresh filter options and jobs list when report tab activated
+        populateFilterOptions();
+        fetchJobs();
       }
-      document.getElementById("assocBarcodeSection").style.display = "block";
+    }
+
+    tabCreate.addEventListener('click', () => activateTab('create'));
+    tabReport.addEventListener('click', () => activateTab('report'));
+
+    // --- Create Job Section ---
+    const operatorEl = document.getElementById('operator');
+    const jobTypeEl = document.getElementById('jobType');
+    const machineEl = document.getElementById('machine');
+    const dateEl = document.getElementById('jobDate');
+    const createBtn = document.getElementById('createBtn');
+    const result = document.getElementById('result');
+    const jobIdText = document.getElementById('jobIdText');
+    const barcodeSvg = document.getElementById('barcode');
+    const createErrorMsg = document.getElementById('createErrorMsg');
+
+    // Set default date to today
+    dateEl.value = new Date().toISOString().slice(0,10);
+
+    async function getNextSequence(dateStr) {
+      const { count, error } = await supabase
+        .from('jobs')
+        .select('*', { count: 'exact', head: true })
+        .eq('job_date', dateStr);
+
+      if (error) {
+        console.error('Error fetching sequence:', error);
+        return null;
+      }
+      return count ? count + 1 : 1;
+    }
+
+    createBtn.addEventListener('click', async () => {
+      createErrorMsg.textContent = '';
+      const op = operatorEl.value.trim();
+      const jt = jobTypeEl.value;
+      const mc = machineEl.value;
+      const dt = dateEl.value;
+      if (!op || !jt || !mc || !dt) {
+        createErrorMsg.textContent = 'Please fill in all fields.';
+        return;
+      }
+
+      const [y,m,d] = dt.split('-');
+      const mmdd = m.padStart(2,'0') + d.padStart(2,'0');
+
+      const seq = await getNextSequence(dt);
+      if (seq === null) {
+        createErrorMsg.textContent = 'Failed to get job sequence. Try again later.';
+        return;
+      }
+
+      const jobId = jt + mc + mmdd + 'J' + seq;
+
+      const { data, error } = await supabase
+        .from('jobs')
+        .insert([{
+          job_id: jobId,
+          name: `${op} - ${jt}`,
+          operator: op,
+          job_type: jt,
+          machine: mc,
+          job_date: dt,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) {
+        createErrorMsg.textContent = 'Error saving job: ' + error.message;
+        return;
+      }
+
+      jobIdText.textContent = jobId;
+      result.style.display = 'block';
+      JsBarcode(barcodeSvg, jobId, { format:'CODE128', width:2, height:80 });
+
+      // Clear form fields except date
+      operatorEl.value = '';
+      jobTypeEl.value = '';
+      machineEl.value = '';
+    });
+
+    // --- Reporting Section ---
+    const filterJobType = document.getElementById('filterJobType');
+    const filterOperator = document.getElementById('filterOperator');
+    const filterMachine = document.getElementById('filterMachine');
+    const filterDateFrom = document.getElementById('filterDateFrom');
+    const filterDateTo = document.getElementById('filterDateTo');
+    const btnFilter = document.getElementById('btnFilter');
+    const btnDownload = document.getElementById('btnDownload');
+    const jobsTableBody = document.querySelector('#jobsTable tbody');
+    const reportErrorMsg = document.getElementById('reportErrorMsg');
+
+    let lastFetchedJobs = [];
+
+    async function populateFilterOptions() {
+      reportErrorMsg.textContent = '';
+      try {
+        const [typesRes, opsRes, machinesRes] = await Promise.all([
+          supabase.from('jobs').select('job_type', { distinct: true }),
+          supabase.from('jobs').select('operator', { distinct: true }),
+          supabase.from('jobs').select('machine', { distinct: true }),
+        ]);
+
+        if (typesRes.error || opsRes.error || machinesRes.error) {
+          throw new Error(typesRes.error?.message || opsRes.error?.message || machinesRes.error?.message);
+        }
+
+        function fillSelect(selectElem, data, key) {
+          // Clear existing options except first ("All")
+          selectElem.options.length = 1;
+          const distinctVals = data.map(r => r[key]).filter(v => v !== null && v !== '').sort();
+          distinctVals.forEach(val => {
+            const option = document.createElement('option');
+            option.value = val;
+            option.textContent = val;
+            selectElem.appendChild(option);
+          });
+        }
+
+        fillSelect(filterJobType, typesRes.data, 'job_type');
+        fillSelect(filterOperator, opsRes.data, 'operator');
+        fillSelect(filterMachine, machinesRes.data, 'machine');
+      } catch (err) {
+        reportErrorMsg.textContent = 'Error loading filters: ' + err.message;
+      }
+    }
+
+    async function fetchJobs() {
+      reportErrorMsg.textContent = '';
+      jobsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+
+      let query = supabase.from('jobs')
+        .select('job_id, name, job_type, operator, machine, created_at')
+        .order('created_at', { ascending: false });
+
+      if (filterJobType.value) query = query.eq('job_type', filterJobType.value);
+      if (filterOperator.value) query = query.eq('operator', filterOperator.value);
+      if (filterMachine.value) query = query.eq('machine', filterMachine.value);
+      if (filterDateFrom.value) query = query.gte('created_at', filterDateFrom.value);
+      if (filterDateTo.value) {
+        const toDate = new Date(filterDateTo.value);
+        toDate.setDate(toDate.getDate() + 1);
+        query = query.lt('created_at', toDate.toISOString().slice(0,10));
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        reportErrorMsg.textContent = 'Error fetching jobs: ' + error.message;
+        jobsTableBody.innerHTML = '';
+        lastFetchedJobs = [];
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        jobsTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No jobs found</td></tr>';
+        lastFetchedJobs = [];
+        return;
+      }
+
+      lastFetchedJobs = data;
+
+      jobsTableBody.innerHTML = data.map(job => `
+        <tr>
+          <td>${job.job_id}</td>
+          <td>${job.name}</td>
+          <td>${job.job_type || ''}</td>
+          <td>${job.operator || ''}</td>
+          <td>${job.machine || ''}</td>
+          <td>${new Date(job.created_at).toLocaleString()}</td>
+        </tr>
+      `).join('');
     }
 
     function downloadCSV() {
-      const rows = [["Job ID", "Operator", "Type", "Machine", "Date"]];
-      document.querySelectorAll("#jobTable tr").forEach(tr => {
-        const cells = Array.from(tr.children).map(td => td.textContent);
-        rows.push(cells);
-      });
-      const csv = rows.map(r => r.join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "job_report.csv";
+      if (!lastFetchedJobs.length) {
+        alert('No jobs to download.');
+        return;
+      }
+
+      const headers = ['Job ID', 'Job Name', 'Job Type', 'Operator', 'Machine', 'Created At'];
+      const rows = lastFetchedJobs.map(j => [
+        j.job_id,
+        j.name,
+        j.job_type || '',
+        j.operator || '',
+        j.machine || '',
+        new Date(j.created_at).toLocaleString()
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      ].join('\r\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'job_reports.csv';
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
-    loadJobs();
-    loadAssociations();
+    btnFilter.addEventListener('click', fetchJobs);
+    btnDownload.addEventListener('click', downloadCSV);
+
+    // Initial tab setup
+    activateTab('create');
   </script>
+
 </body>
 </html>
