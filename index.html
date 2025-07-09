@@ -4,33 +4,207 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Job Barcode Manager</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.5/+esm"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <title>Job Barcode App</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
-    header { background: #1a202c; color: white; padding: 1rem; text-align: center; }
-    nav { display: flex; background: #2d3748; }
-    nav button {
-      flex: 1; padding: 1rem; background: #2d3748; color: white; border: none; cursor: pointer;
-    }
-    nav button.active { background: #4a5568; font-weight: bold; }
-    .tab-content { display: none; padding: 1rem; }
-    .tab-content.active { display: block; }
-    label { display: block; margin-top: 0.75rem; }
-    input, select { width: 100%; padding: 0.5rem; margin-top: 0.25rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { padding: 0.5rem; border: 1px solid #ccc; text-align: left; }
-    .checkboxes label { display: inline-block; margin-right: 1rem; }
-    .modal {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center;
-    }
-    .modal-content {
-      background-color: white; padding: 2rem; border-radius: 5px; text-align: center;
-    }
-    .modal-content svg { max-width: 300px; margin-top: 1rem; }
+    body { font-family: sans-serif; padding: 20px; background: #f8f8f8; color: #333; }
+    h1, h2 { margin-bottom: 0.5em; }
+    .tabs { display: flex; margin-bottom: 1em; gap: 10px; }
+    .tab { padding: 10px 15px; background: #ddd; cursor: pointer; border-radius: 4px; }
+    .tab.active { background: #4CAF50; color: white; }
+    .content { display: none; }
+    .content.active { display: block; }
+    label { display: block; margin-top: 10px; }
+    input, select { padding: 5px; margin-top: 5px; width: 100%; }
+    button { margin-top: 10px; padding: 8px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    .filter-section { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .barcode-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid #ccc; display: none; z-index: 1000; }
+    .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; z-index: 999; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 </head>
 <body>
-<!-- Content continues below (truncated to fit limit)... -->
+
+<h1>Job Barcode App</h1>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('create')">Create Job</div>
+  <div class="tab" onclick="switchTab('associate')">Associate Job Types</div>
+  <div class="tab" onclick="switchTab('report')">Reports</div>
+</div>
+
+<div id="create" class="content active">
+  <h2>Create Job</h2>
+  <form id="jobForm">
+    <label>Operator: <input type="text" id="operator" required /></label>
+    <label>Machine #: <input type="text" id="machine" required /></label>
+    <label>Job Type:
+      <select id="jobType" required>
+        <option value="">Select...</option>
+        <option value="L">L - First Class Letters</option>
+        <option value="M">M - Machinable Letters</option>
+        <option value="A">A - All, Merge Letter Jobs</option>
+        <option value="F">F - First Class Flats</option>
+        <option value="D">D - Standard Flats</option>
+        <option value="T">T - Standard Letters</option>
+      </select>
+    </label>
+    <label>Date: <input type="date" id="jobDate" required /></label>
+    <button type="submit">Create Job</button>
+  </form>
+  <svg id="barcode"></svg>
+</div>
+
+<div id="associate" class="content">
+  <h2>Associate Job Types</h2>
+  <label>Select Original Job ID:
+    <select id="originalJobSelect"></select>
+  </label>
+  <label><input type="checkbox" id="assocL" /> Create L - First Class Letters</label>
+  <label><input type="checkbox" id="assocM" /> Create M - Machinable Letters</label>
+  <label><input type="checkbox" id="assocA" /> Create A - All, Merge Letter Jobs</label>
+  <button onclick="generateAssociated()">Generate Associated IDs</button>
+  <svg id="assocBarcode"></svg>
+</div>
+
+<div id="report" class="content">
+  <h2>Job Report</h2>
+  <div class="filter-section">
+    <label>Filter by Type: <select id="filterType"><option value="">All</option></select></label>
+    <label>Operator: <input type="text" id="filterOperator" /></label>
+    <label>Machine: <input type="text" id="filterMachine" /></label>
+    <label>Date From: <input type="date" id="filterStart" /></label>
+    <label>Date To: <input type="date" id="filterEnd" /></label>
+    <button onclick="loadJobs()">Apply Filters</button>
+    <button onclick="downloadCSV()">Download</button>
+  </div>
+  <table id="jobTable"><thead><tr><th>Job ID</th><th>Type</th><th>Operator</th><th>Machine</th><th>Date</th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="overlay" onclick="closeModal()"></div>
+<div class="barcode-modal" id="barcodeModal">
+  <svg id="modalBarcode"></svg>
+</div>
+
+<script>
+// Supabase init
+const supabase = window.supabase.createClient(
+  'https://vwsqtcsxxzkxcrdcbbky.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3c3F0Y3N4eHpreGNyZGNiYmt5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA3ODY3MTIsImV4cCI6MjA2NjM2MjcxMn0.rN559kMiLeExnVyZmXxRLg3yYjJwWfwDlkzPuFX7qeA'
+);
+
+// Tab switching
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+  document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.tab[onclick="switchTab('${id}')"]`).classList.add('active');
+  document.getElementById(id).classList.add('active');
+  if (id === 'associate') loadJobOptions();
+  if (id === 'report') loadJobs();
+}
+
+// Barcode view modal
+function showBarcode(code) {
+  JsBarcode("#modalBarcode", code, { format: "CODE128" });
+  document.querySelector(".overlay").style.display = 'block';
+  document.getElementById("barcodeModal").style.display = 'block';
+}
+function closeModal() {
+  document.querySelector(".overlay").style.display = 'none';
+  document.getElementById("barcodeModal").style.display = 'none';
+}
+
+// Create job
+document.getElementById("jobForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const operator = document.getElementById("operator").value;
+  const machine = document.getElementById("machine").value;
+  const type = document.getElementById("jobType").value;
+  const date = document.getElementById("jobDate").value;
+  if (!(operator && machine && type && date)) return;
+
+  const shortDate = new Date(date).toISOString().slice(5,10).replace("-", "");
+  const { data: existing, error } = await supabase
+    .from("jobs")
+    .select()
+    .eq("job_type", type)
+    .eq("job_date", date);
+  const jobNum = (existing.length || 0) + 1;
+  const jobID = `${type}${machine}${shortDate}J${jobNum}`;
+  await supabase.from("jobs").insert([{ operator, machine, job_type: type, job_date: date, job_id: jobID }]);
+  JsBarcode("#barcode", jobID, { format: "CODE128" });
+  loadJobs();
+};
+
+// Load jobs for reporting
+async function loadJobs() {
+  let query = supabase.from("jobs").select("*").order("job_date", { ascending: false });
+  const type = document.getElementById("filterType").value;
+  const op = document.getElementById("filterOperator").value;
+  const mac = document.getElementById("filterMachine").value;
+  const start = document.getElementById("filterStart").value;
+  const end = document.getElementById("filterEnd").value;
+  if (type) query = query.eq("job_type", type);
+  if (op) query = query.ilike("operator", `%${op}%`);
+  if (mac) query = query.ilike("machine", `%${mac}%`);
+  if (start) query = query.gte("job_date", start);
+  if (end) query = query.lte("job_date", end);
+  const { data } = await query;
+  const body = document.querySelector("#jobTable tbody");
+  body.innerHTML = "";
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><a href="#" onclick="showBarcode('${row.job_id}')">${row.job_id}</a></td>
+      <td>${row.job_type}</td><td>${row.operator}</td><td>${row.machine}</td><td>${row.job_date}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+// Associated job generation
+async function loadJobOptions() {
+  const { data } = await supabase.from("jobs").select("job_id").in("job_type", ["L", "M", "A"]);
+  const select = document.getElementById("originalJobSelect");
+  select.innerHTML = data.map(d => `<option value="${d.job_id}">${d.job_id}</option>`).join("");
+}
+async function generateAssociated() {
+  const origID = document.getElementById("originalJobSelect").value;
+  const parts = origID.match(/^([LMA])(\d+)(\d{4})J(\d+)$/);
+  if (!parts) return alert("Invalid format");
+  const [, , machine, shortDate, jobNum] = parts;
+  const date = `2025-${shortDate.slice(0,2)}-${shortDate.slice(2)}`;
+  const operator = "linked"; // Could look up from Supabase if desired
+  const targets = [];
+  if (document.getElementById("assocL").checked) targets.push("L");
+  if (document.getElementById("assocM").checked) targets.push("M");
+  if (document.getElementById("assocA").checked) targets.push("A");
+
+  for (const t of targets) {
+    const jobID = `${t}${machine}${shortDate}J${jobNum}`;
+    await supabase.from("jobs").upsert([{ job_id: jobID, job_type: t, job_date: date, machine, operator }]);
+    JsBarcode("#assocBarcode", jobID, { format: "CODE128" });
+  }
+  loadJobs();
+}
+
+// Download CSV
+function downloadCSV() {
+  const rows = [["Job ID", "Job Type", "Operator", "Machine", "Date"]];
+  document.querySelectorAll("#jobTable tbody tr").forEach(tr => {
+    const cells = Array.from(tr.children).map(td => td.innerText);
+    rows.push(cells);
+  });
+  const csv = rows.map(r => r.join(",")).join("
+");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "job_report.csv";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+</script>
+</body>
+</html>
